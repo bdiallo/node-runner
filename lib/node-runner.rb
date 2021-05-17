@@ -1,6 +1,7 @@
 require "tmpdir"
 require "open3"
 require "json"
+require 'io/wait'
 
 class NodeRunnerError < StandardError; end
 
@@ -11,11 +12,11 @@ class NodeRunner
     @executor = options[:executor] || NodeRunner::Executor.new
     @function_name = options[:function_name] || "main"
   end
-  
+
   def output
     exec
   end
-  
+
   def method_missing(m, *args, &block)
     @function_name = m
     if block
@@ -30,7 +31,7 @@ class NodeRunner
   def encode(string)
     string.encode('UTF-8')
   end
-  
+
   def exec
     source = @executor.compile_source(@source, @args.to_json, @function_name)
     tmpfile = write_to_tempfile(source)
@@ -101,14 +102,11 @@ class NodeRunner::Executor
 
   def exec(filename)
     ENV["NODE_PATH"] = @modules_path
-    stdout, stderr, status = Open3.capture3("#{binary} #{filename}")
-    if status.success?
-      stdout
-    else
-      raise exec_runtime_error(stderr)
-    end
+    stdin, stdout, stderr, status = Open3.popen3("#{binary} #{filename}")
+    errors = ""
+    result = stdout.readline
   end
-  
+
   protected
 
   def binary
